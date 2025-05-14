@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import config from "config";
+import logger from "./logger";
 
 
 async function connect() {
@@ -7,9 +8,9 @@ async function connect() {
 
   try {
     await mongoose.connect(db_uri);
-    console.log("Database Connected")
+    logger.info("Database Connected")
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     process.exit(1);
   }
 }
