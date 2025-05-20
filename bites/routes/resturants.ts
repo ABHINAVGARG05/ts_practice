@@ -2,6 +2,10 @@ import express from "express";
 import type { Request } from "express";
 import { validate } from "../middleware/validate.js";
 import { RestaurantSchema, type Restaurant } from "../schemas/restaurant.js";
+import express from "express";
+import type { Request } from "express";
+import { validate } from "../middleware/validate.js";
+import { RestaurantSchema, type Restaurant } from "../schemas/restaurant.js";
 import { intialiseRedisClient } from "../utils/clients.js";
 import {
   bloomKey,
@@ -158,3 +162,4 @@ router.get(
 );
 
 export default router;
+
