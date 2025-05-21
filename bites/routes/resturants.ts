@@ -12,6 +12,7 @@ import {
   restaurantsByRatingKey,
   reviewDetailsKeyById,
   reviewKeyById,
+  weatherKeyById,
 } from "../utils/key.js";
 import { nanoid } from "nanoid/non-secure";
 import { errorResponse, successResponse } from "../utils/responses.js";
@@ -20,10 +21,24 @@ import { ReviewSchema, type Review } from "../schemas/review.js";
 import { timeStamp } from "console";
 const router = express.Router();
 
-router.get("/", validate(RestaurantSchema), async (req, res) => {
-  const data = req.body;
-  const client = await intialiseRedisClient();
-  res.send("Hello World");
+router.get("/", async (req, res, next) => {
+  const { page = 1, limit = 10 } = req.query;
+  const start = (Number(page) - 1) * Number(limit);
+  const end = start + Number(limit);
+
+  try {
+    const client = await intialiseRedisClient();
+    const restaurantsId = await client.zRange(
+      restaurantsByRatingKey,
+      start,
+      end,
+      {
+        REV: true,
+      }
+    );
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.post("/", validate(RestaurantSchema), async (req, res, next) => {
@@ -60,6 +75,38 @@ router.post("/", validate(RestaurantSchema), async (req, res, next) => {
 });
 
 router.get(
+  "/:restaurantId/weather",
+  checkRestaurantExists,
+  async (req: Request<{ restaurantId: string }>, res, next) => {
+    const { restaurantId } = req.params;
+    try {
+      const client = await intialiseRedisClient();
+      const weatherKey = weatherKeyById(restaurantId);
+      const cachedWeather = await client.get(weatherKey);
+      if (cachedWeather) {
+        console.log("Cached Hit");
+        return successResponse(res, JSON.parse(cachedWeather));
+      }
+      const restaurantKey = restaurantKeyById(restaurantId);
+      const coords = await client.hGet(restaurantKey, "location");
+      if (!coords) {
+        return errorResponse(res, 404, "Coordinates ahve not been found");
+      }
+      const [long, lat] = coords.split(",");
+      const apiResponse = await fetch("");
+      if (apiResponse.status === 200) {
+        const json = await apiResponse.json();
+        await client.set(weatherKey, JSON.stringify(json), { EX: 60 * 60 });
+        return successResponse(res, json);
+      }
+      return errorResponse(res, 500, "Couldn't fetch weather info");
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.get(
   "/:restaurantId/reviews",
   checkRestaurantExists,
   async (req: Request<{ restaurantId: string }>, res, next) => {
@@ -94,16 +141,30 @@ router.post(
       const reviewId = nanoid();
       const reviewKey = reviewKeyById(restaurantId);
       const reviewDetailsKey = reviewDetailsKeyById(reviewId);
+      const restaurantKey = restaurantKeyById(restaurantId);
       const reviewData = {
         id: reviewId,
         ...data,
         timeStamp: Date.now(),
         restaurantId,
       };
-      await Promise.all([
+      const [reviewCount, setResult, totalStars] = await Promise.all([
         (await client).lPush(reviewKey, reviewId),
         (await client).hSet(reviewDetailsKey, reviewData),
+        (await client).hIncrByFloat(restaurantKey, "totalStars", data.rating),
       ]);
+
+      const averageRating = Number((totalStars / reviewCount).toFixed(1));
+      await Promise.all([
+        (
+          await client
+        ).zAdd(restaurantsByRatingKey, {
+          score: averageRating,
+          value: restaurantId,
+        }),
+        (await client).hSet(restaurantKey, "avgStars", averageRating),
+      ]);
+
       return successResponse(res, reviewData, "Review Added");
     } catch (error) {
       next(error);
@@ -149,9 +210,9 @@ router.get(
       const [viewCount, restaurant, cuisines] = await Promise.all([
         client.hIncrBy(restaurantKey, "viewCount", 1),
         client.hGetAll(restaurantKey),
-        client.sMembers(restaurantCuisinesKeyById(restaurantId))
+        client.sMembers(restaurantCuisinesKeyById(restaurantId)),
       ]);
-      return successResponse(res, {...restaurant, cuisines});
+      return successResponse(res, { ...restaurant, cuisines });
     } catch (error) {
       next(error);
     }
