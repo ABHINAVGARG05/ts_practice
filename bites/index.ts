@@ -8,7 +8,7 @@ const app = express()
 app.use(express.json())
 
 app.use("/restaurants", restRouter);
-app.use("/cusines", cusRouter);
+app.use("/cuisines", cusRouter);
 
 app.use(erroHandler)
 

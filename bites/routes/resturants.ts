@@ -124,16 +124,16 @@ router.delete(
       const client = await intialiseRedisClient();
       const reviewKey = reviewKeyById(reviewId);
       const reviewKeyDetailsKey = reviewDetailsKeyById(reviewId);
-      const [removeResult, deleteResult] = await Promise.all ([
+      const [removeResult, deleteResult] = await Promise.all([
         client.lRem(reviewKey, 0, reviewId),
-        client.del(reviewKeyDetailsKey)
+        client.del(reviewKeyDetailsKey),
       ]);
       if (removeResult === 0 && deleteResult === 0) {
         return errorResponse(res, 404, "Review Not Found");
       }
       return successResponse(res, reviewId, "Review Deleted");
-    }catch(error) {
-      next(error)
+    } catch (error) {
+      next(error);
     }
   }
 );
@@ -146,11 +146,12 @@ router.get(
     try {
       const client = await intialiseRedisClient();
       const restaurantKey = restaurantKeyById(restaurantId);
-      const [viewCount, restaurant] = await Promise.all([
+      const [viewCount, restaurant, cuisines] = await Promise.all([
         client.hIncrBy(restaurantKey, "viewCount", 1),
         client.hGetAll(restaurantKey),
+        client.sMembers(restaurantCuisinesKeyById(restaurantId))
       ]);
-      return successResponse(res, restaurant);
+      return successResponse(res, {...restaurant, cuisines});
     } catch (error) {
       next(error);
     }
@@ -158,4 +159,3 @@ router.get(
 );
 
 export default router;
-
