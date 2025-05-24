@@ -39,21 +39,31 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const ws_1 = __importStar(require("ws"));
 const http_1 = __importDefault(require("http"));
 const server = http_1.default.createServer(function (request, response) {
-    console.log((new Date()) + ' Received request for ' + request.url);
+    console.log(new Date() + " Received request for " + request.url);
     response.end("hi there");
 });
 const wss = new ws_1.WebSocketServer({ server });
-wss.on('connection', function connection(ws) {
-    ws.on('error', console.error);
-    ws.on('message', function message(data, isBinary) {
+wss.on("connection", function connection(ws) {
+    ws.on("error", console.error);
+    ws.on("message", function message(data, isBinary) {
         wss.clients.forEach(function each(client) {
             if (client.readyState === ws_1.default.OPEN) {
                 client.send(data, { binary: isBinary });
             }
         });
     });
-    ws.send('Hello! Message From Server!!');
+    ws.send("Hello! Message From Server!!");
+});
+wss.on("connection", function (ws) {
+    ws.on("error", (err) => console.error(err));
+    ws.on("close", function () {
+        wss.clients.forEach(function each(client) {
+            if (client !== ws && client.readyState === ws_1.default.OPEN) {
+                client.send("Signing off Abhinav Garg");
+            }
+        });
+    });
 });
 server.listen(8080, function () {
-    console.log((new Date()) + ' Server is listening on port 8080');
+    console.log(new Date() + " Server is listening on port 8080");
 });
